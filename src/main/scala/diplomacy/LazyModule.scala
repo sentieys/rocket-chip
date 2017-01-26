@@ -12,7 +12,7 @@ abstract class LazyModule()(implicit val p: Parameters)
   protected[diplomacy] var children = List[LazyModule]()
   protected[diplomacy] var nodes = List[BaseNode]()
   protected[diplomacy] var info: SourceInfo = UnlocatableSourceInfo
-  protected[diplomacy] val parent = LazyModule.stack.headOption
+  val parent = LazyModule.stack.headOption
 
   LazyModule.stack = this :: LazyModule.stack
   parent.foreach(p => p.children = this :: p.children)

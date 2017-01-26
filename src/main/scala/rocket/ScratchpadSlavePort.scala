@@ -14,7 +14,8 @@ import uncore.util._
 import util._
 
 class ScratchpadSlavePort(sizeBytes: Int)(implicit p: Parameters) extends LazyModule
-    with HasCoreParameters {
+    with HasCoreParameters
+    with TLDeviceTop {
   val node = TLManagerNode(Seq(TLManagerPortParameters(
     Seq(TLManagerParameters(
       address            = List(AddressSet(0x80000000L, BigInt(sizeBytes-1))),

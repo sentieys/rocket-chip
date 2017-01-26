@@ -24,10 +24,11 @@ trait CoreplexRISCVPlatform extends CoreplexNetwork {
 
   plic.intnode := intBar.intnode
 
-  lazy val configString = {
-    val managers = l1tol2.node.edgesIn(0).manager.managers
-    rocketchip.GenerateConfigString(p, clint, plic, managers)
-  }
+  lazy val peripheralData: DeviceData = DeviceDataUtils.getDeviceData(
+    plic.flatSources,
+    l1tol2.node.edgesIn(0).manager.managers
+  )
+  lazy val configString: String = DeviceDataUtils.formatConfigString(peripheralData)
 }
 
 trait CoreplexRISCVPlatformBundle extends CoreplexNetworkBundle {

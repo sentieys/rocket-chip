@@ -80,7 +80,7 @@ object TLRegisterNode
 // register mapped device from a totally abstract register mapped device.
 // See GPIO.scala in this directory for an example
 
-abstract class TLRegisterRouterBase(val address: AddressSet, interrupts: Int, concurrency: Int, beatBytes: Int, undefZero: Boolean, executable: Boolean)(implicit p: Parameters) extends LazyModule
+abstract class TLRegisterRouterBase(val address: AddressSet, interrupts: Int, concurrency: Int, beatBytes: Int, undefZero: Boolean, executable: Boolean)(implicit p: Parameters) extends LazyModule with TLDeviceTop
 {
   val node = TLRegisterNode(address, concurrency, beatBytes, undefZero, executable)
   val intnode = IntSourceNode(interrupts)

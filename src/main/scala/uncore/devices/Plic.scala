@@ -53,7 +53,7 @@ object PLICConsts
 }
 
 /** Platform-Level Interrupt Controller */
-class TLPLIC(supervisor: Boolean, maxPriorities: Int, address: BigInt = 0xC000000)(implicit p: Parameters) extends LazyModule
+class TLPLIC(supervisor: Boolean, maxPriorities: Int, address: BigInt = 0xC000000)(implicit p: Parameters) extends LazyModule with TLDeviceTop
 {
   val contextsPerHart = if (supervisor) 2 else 1
   require (maxPriorities >= 0)
@@ -106,18 +106,18 @@ class TLPLIC(supervisor: Boolean, maxPriorities: Int, address: BigInt = 0xC00000
     s"      };\n")).mkString
   }
 
+  // Assign all the devices unique ranges
+  lazy val sources = intnode.edgesIn.map(_.source)
+  lazy val flatSources = (sources zip sources.map(_.num).scanLeft(0)(_+_).init).map {
+    case (s, o) => s.sources.map(z => z.copy(range = z.range.offset(o)))
+  }.flatten
+
   lazy val module = new LazyModuleImp(this) {
     val io = new Bundle {
       val tl_in = node.bundleIn
       val devices = intnode.bundleIn
       val harts = intnode.bundleOut
     }
-
-    // Assign all the devices unique ranges
-    val sources = intnode.edgesIn.map(_.source)
-    val flatSources = (sources zip sources.map(_.num).scanLeft(0)(_+_).init).map {
-      case (s, o) => s.sources.map(z => z.copy(range = z.range.offset(o)))
-    }.flatten
     // Compact the interrupt vector the same way
     val interrupts = (intnode.edgesIn zip io.devices).map { case (e, i) => i.take(e.source.num) }.flatten
     // This flattens the harts into an MSMSMSMSMS... or MMMMM.... sequence
@@ -213,5 +213,34 @@ class TLPLIC(supervisor: Boolean, maxPriorities: Int, address: BigInt = 0xC00000
     pending(0) := false
     for (e <- enables)
       e(0) := false
+  }
+
+  override def getDeviceData(interruptParams: Seq[IntSourceParameters], addressParams: Seq[TLManagerParameters]): DeviceDataItems = {
+    // Ignore the arguments because this is the PLIC LazyModule and it already
+    // knows the correct values.
+    DeviceDataItems(name -> DeviceDataItems(
+      "priority" -> DeviceDataHex(address),
+      "pending" -> DeviceDataHex(address + PLICConsts.pendingBase),
+      "ndevs" -> DeviceDataInt(nDevices)
+    ))
+  }
+
+  def getHartDeviceData(hartId: Int): DeviceDataItems = {
+    def getDeviceDataForMode(mode: String): DeviceDataItems = {
+      val modeChar = mode.toUpperCase.charAt(0)
+      DeviceDataItems(
+        mode -> DeviceDataItems(
+          "ie" -> DeviceDataHex(enableAddr(hartId, modeChar)),
+          "thresh" -> DeviceDataHex(threshAddr(hartId, modeChar)),
+          "claim" -> DeviceDataHex(claimAddr(hartId, modeChar))
+        )
+      )
+    }
+    DeviceDataItems(
+      "plic" -> (
+        getDeviceDataForMode("m") ++
+        (if (supervisor) getDeviceDataForMode("s") else DeviceDataItems())
+      )
+    )
   }
 }

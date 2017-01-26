@@ -5,6 +5,7 @@ package util
 import Chisel._
 import config._
 import diplomacy.LazyModule
+import uncore.tilelink2.DeviceDataUtils
 import java.io.{File, FileWriter}
 
 /** Representation of the information this Generator needs to collect from external sources. */
