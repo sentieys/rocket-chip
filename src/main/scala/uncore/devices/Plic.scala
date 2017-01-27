@@ -82,30 +82,6 @@ class TLPLIC(supervisor: Boolean, maxPriorities: Int, address: BigInt = 0xC00000
   def threshAddr(i: Int, mode: Char) = address + PLICConsts.hartBase(context(i, mode))
   def enableAddr(i: Int, mode: Char) = address + PLICConsts.enableBase(context(i, mode))
 
-  // Create the global PLIC config string
-  lazy val globalConfigString = Seq(
-    s"plic {\n",
-    s"  priority 0x${address.toString(16)};\n",
-    s"  pending 0x${(address + PLICConsts.pendingBase).toString(16)};\n",
-    s"  ndevs ${nDevices};\n",
-    s"};\n").mkString
-
-  // Create the per-Hart config string
-  lazy val hartConfigStrings = Seq.tabulate(intnode.edgesOut.size) { i => (Seq(
-    s"      plic {\n",
-    s"        m {\n",
-    s"         ie 0x${enableAddr(i, 'M').toString(16)};\n",
-    s"         thresh 0x${threshAddr(i, 'M').toString(16)};\n",
-    s"         claim 0x${claimAddr(i, 'M').toString(16)};\n",
-    s"        };\n") ++ (if (!supervisor) Seq() else Seq(
-    s"        s {\n",
-    s"         ie 0x${enableAddr(i, 'S').toString(16)};\n",
-    s"         thresh 0x${threshAddr(i, 'S').toString(16)};\n",
-    s"         claim 0x${claimAddr(i, 'S').toString(16)};\n",
-    s"        };\n")) ++ Seq(
-    s"      };\n")).mkString
-  }
-
   // Assign all the devices unique ranges
   lazy val sources = intnode.edgesIn.map(_.source)
   lazy val flatSources = (sources zip sources.map(_.num).scanLeft(0)(_+_).init).map {

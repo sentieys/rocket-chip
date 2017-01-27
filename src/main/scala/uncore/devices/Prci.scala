@@ -88,15 +88,6 @@ class CoreplexLocalInterrupter(address: BigInt = 0x02000000)(implicit p: Paramet
   new TLRegBundle((), _)    with CoreplexLocalInterrupterBundle)(
   new TLRegModule((), _, _) with CoreplexLocalInterrupterModule)
 {
-  val globalConfigString = Seq(
-    s"rtc {\n",
-    s"  addr 0x${(address + ClintConsts.timeOffset).toString(16)};\n",
-    s"};\n").mkString
-  val hartConfigStrings = (0 until p(NTiles)).map { i => Seq(
-    s"      timecmp 0x${(address + ClintConsts.timecmpOffset(i)).toString(16)};\n",
-    s"      ipi 0x${(address + ClintConsts.msipOffset(i)).toString(16)};\n").mkString
-  }
-
   override def getDeviceData(interruptParams: Seq[IntSourceParameters], addressParams: Seq[TLManagerParameters]): DeviceDataItems = {
     super.getDeviceData(interruptParams, addressParams) ++
     DeviceDataItems("rtc" -> DeviceDataItems(
