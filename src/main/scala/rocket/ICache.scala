@@ -43,7 +43,7 @@ class ICache(val latency: Int)(implicit p: Parameters) extends LazyModule {
 
 class ICacheBundle(outer: ICache) extends CoreBundle()(outer.p) {
   val req = Valid(new ICacheReq).flip
-  val s1_ppn = UInt(INPUT, ppnBits) // delayed one cycle w.r.t. req
+  val s1_paddr = UInt(INPUT, paddrBits) // delayed one cycle w.r.t. req
   val s1_kill = Bool(INPUT) // delayed one cycle w.r.t. req
   val s2_kill = Bool(INPUT) // delayed two cycles; prevents I$ miss emission
 
@@ -71,12 +71,9 @@ class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
   val s1_any_tag_hit = Wire(Bool())
 
   val s1_valid = Reg(init=Bool(false))
-  val s1_vaddr = Reg(UInt())
-  val s1_paddr = Cat(io.s1_ppn, s1_vaddr(pgIdxBits-1,0))
-  val s1_tag = s1_paddr(tagBits+untagBits-1,untagBits)
-
   val out_valid = s1_valid && !io.s1_kill && state === s_ready
-  val s1_idx = s1_vaddr(untagBits-1,blockOffBits)
+  val s1_idx = io.s1_paddr(untagBits-1,blockOffBits)
+  val s1_tag = io.s1_paddr(tagBits+untagBits-1,untagBits)
   val s1_hit = out_valid && s1_any_tag_hit
   val s1_miss = out_valid && !s1_any_tag_hit
 
@@ -84,10 +81,9 @@ class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
   val s0_vaddr = io.req.bits.addr
 
   s1_valid := s0_valid || out_valid && stall
-  when (s0_valid) { s1_vaddr := s0_vaddr }
 
   when (s1_miss && state === s_ready) {
-    refill_addr := s1_paddr
+    refill_addr := io.s1_paddr
   }
   val refill_tag = refill_addr(tagBits+untagBits-1,untagBits)
   val refill_idx = refill_addr(untagBits-1,blockOffBits)
@@ -122,7 +118,7 @@ class ICacheModule(outer: ICache) extends LazyModuleImp(outer)
   val s1_dout_valid = RegNext(s0_valid)
 
   for (i <- 0 until nWays) {
-    val s1_vb = !io.invalidate && vb_array(Cat(UInt(i), s1_vaddr(untagBits-1,blockOffBits))).toBool
+    val s1_vb = !io.invalidate && vb_array(Cat(UInt(i), io.s1_paddr(untagBits-1,blockOffBits))).toBool
     val tag_out = tag_rdata(i)
     val s1_tag_disparity = code.decode(tag_out).error holdUnless s1_dout_valid
     s1_tag_match(i) := (tag_out(tagBits-1,0) === s1_tag) holdUnless s1_dout_valid

@@ -21,7 +21,7 @@ import config._
 
 class BasePlatformConfig extends Config((site, here, up) => {
   // TileLink connection parameters
-  case TLMonitorBuilder => (args: TLMonitorArgs) => Some(LazyModule(new TLMonitor(args)))
+  case TLMonitorBuilder => (args: TLMonitorArgs) => None
   case TLFuzzReadyValid => false
   case TLCombinationalCheck => false
   //Memory Parameters
