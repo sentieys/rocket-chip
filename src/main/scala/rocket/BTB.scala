@@ -146,12 +146,11 @@ class BTB(implicit p: Parameters) extends BtbModule {
   }
 
   val idxs = Reg(Vec(entries, UInt(width=matchBits - log2Up(coreInstBytes))))
-  val idxPages = Reg(Vec(entries, UInt(width=log2Up(nPages))))
+  val idxPages = Reg(init = Vec.fill(entries)(nPages.U))
   val tgts = Reg(Vec(entries, UInt(width=matchBits - log2Up(coreInstBytes))))
   val tgtPages = Reg(Vec(entries, UInt(width=log2Up(nPages))))
   val pages = Reg(Vec(nPages, UInt(width=vaddrBits - matchBits)))
 
-  val isValid = Reg(init = UInt(0, entries))
   val isReturn = Reg(UInt(width = entries))
   val isJump = Reg(UInt(width = entries))
   val brIdx = Reg(Vec(entries, UInt(width=log2Up(fetchWidth))))
@@ -159,20 +158,21 @@ class BTB(implicit p: Parameters) extends BtbModule {
   private def page(addr: UInt) = addr >> matchBits
   private def pageMatch(addr: UInt) = {
     val p = page(addr)
-    pages.map(_ === p).asUInt
+    pages.map(_ === p)
   }
   private def idxMatch(addr: UInt) = {
     val idx = addr(matchBits-1, log2Up(coreInstBytes))
-    idxs.map(_ === idx).asUInt & isValid
+    idxs.map(_ === idx).asUInt
   }
 
   val r_btb_update = Pipe(io.btb_update)
   val update_target = io.req.bits.addr
 
-  val pageHit = pageMatch(io.req.bits.addr)
+  val pageHitVec = pageMatch(io.req.bits.addr)
+  val pageHit = pageHitVec.asUInt
   val idxHit = idxMatch(io.req.bits.addr)
 
-  val updatePageHit = pageMatch(r_btb_update.bits.pc)
+  val updatePageHit = pageMatch(r_btb_update.bits.pc).asUInt
   val updateHit = r_btb_update.bits.prediction.valid
   val updateHitAddr = r_btb_update.bits.prediction.bits.entry
 
@@ -182,13 +182,13 @@ class BTB(implicit p: Parameters) extends BtbModule {
   val nextPageRepl = Reg(UInt(width = log2Ceil(nPages)))
   val idxPageRepl = Mux(usePageHit, Cat(pageHit(nPages-2,0), pageHit(nPages-1)), UIntToOH(nextPageRepl))
   val idxPageUpdateOH = Mux(useUpdatePageHit, updatePageHit, idxPageRepl)
-  val idxPageUpdate = OHToUInt(idxPageUpdateOH)
+  val idxPageUpdate = PriorityEncoder(idxPageUpdateOH)
   val idxPageReplEn = Mux(doIdxPageRepl, idxPageRepl, UInt(0))
 
   val samePage = page(r_btb_update.bits.pc) === page(update_target)
   val doTgtPageRepl = !samePage && !usePageHit
   val tgtPageRepl = Mux(samePage, idxPageUpdateOH, Cat(idxPageUpdateOH(nPages-2,0), idxPageUpdateOH(nPages-1)))
-  val tgtPageUpdate = OHToUInt(Mux(usePageHit, pageHit, tgtPageRepl))
+  val tgtPageUpdate = PriorityEncoder(Mux(usePageHit, pageHit, tgtPageRepl))
   val tgtPageReplEn = Mux(doTgtPageRepl, tgtPageRepl, UInt(0))
 
   when (r_btb_update.valid && (doIdxPageRepl || doTgtPageRepl)) {
@@ -203,9 +203,8 @@ class BTB(implicit p: Parameters) extends BtbModule {
     val mask = UIntToOH(waddr)
     idxs(waddr) := r_btb_update.bits.pc(matchBits-1, log2Up(coreInstBytes))
     tgts(waddr) := update_target(matchBits-1, log2Up(coreInstBytes))
-    idxPages(waddr) := idxPageUpdate
+    idxPages(waddr) := Mux(r_btb_update.bits.isValid, idxPageUpdate, nPages)
     tgtPages(waddr) := tgtPageUpdate
-    isValid := Mux(r_btb_update.bits.isValid, isValid | mask, isValid & ~mask)
     isReturn := Mux(r_btb_update.bits.isReturn, isReturn | mask, isReturn & ~mask)
     isJump := Mux(r_btb_update.bits.isJump, isJump | mask, isJump & ~mask)
     if (fetchWidth > 1)
@@ -224,7 +223,7 @@ class BTB(implicit p: Parameters) extends BtbModule {
       Mux(idxWritesEven, page(update_target), page(r_btb_update.bits.pc)))
   }
 
-  io.resp.valid := (pageHit & Mux1H(idxHit, idxPages.map(UIntToOH(_)))).orR
+  io.resp.valid := pageHit(Mux1H(idxHit, idxPages))
   io.resp.bits.taken := true
   io.resp.bits.target := Cat(pages(Mux1H(idxHit, tgtPages)), Mux1H(idxHit, tgts) << log2Up(coreInstBytes))
   io.resp.bits.entry := OHToUInt(idxHit)
@@ -234,7 +233,7 @@ class BTB(implicit p: Parameters) extends BtbModule {
   // if multiple entries for same PC land in BTB, or if pageHit disagrees
   // with idxHit, zap the offending entries
   when (PopCountAtLeast(idxHit, 2) || (idxHit.orR && !io.resp.valid)) {
-    isValid := isValid & ~idxHit
+    for (i <- 0 until entries) when (idxHit(i)) { idxPages(i) := nPages }
   }
 
   if (nBHT > 0) {
